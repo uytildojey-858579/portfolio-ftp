@@ -1,0 +1,19 @@
+# Ignorer tous les fichiers générés automatiquement ou inutiles
+
+# Logs et temporaires
+*.log
+*.tmp
+*.swp
+*.bak
+
+# Dossiers spécifiques au système
+.DS_Store
+Thumbs.db
+
+# Dossiers sensibles ou volumineux à ne pas suivre
+ftp/samba/samba-4.7.0/
+site/wordpress_docker/wordpress/
+
+# Docker volumes (si tu les montes depuis l'hôte)
+volumes/
+data/

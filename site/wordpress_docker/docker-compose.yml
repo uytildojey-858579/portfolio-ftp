@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  wordpress:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    environment:
+      WORDPRESS_DB_HOST: mysql-db
+      WORDPRESS_DB_USER: wordpress_user
+      WORDPRESS_DB_PASSWORD: wordpress_pass
+      WORDPRESS_DB_NAME: wordpress_db
+    networks:
+      - intranet
+
+networks:
+  intranet:
+    external: true
