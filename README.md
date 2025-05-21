@@ -20,5 +20,5 @@
 - Et lire samba-installation.txt
 - Bonne chance
 # Lancement vsftpd
-- Pas utile pour l'instant, car il faut le mettre dans le même que samba, sauf que l'installation de samba est dur 
+- Pas utile pour l'instant, car il faut le mettre dans le même que samba, sauf que l'installation de samba est dur, et comporte problème
 
