@@ -16,7 +16,7 @@
 - Ces CVE ont toutes plus de 5 ans (repo publié 2025)
 # Lancement samba
 - aller dans ftp/samba
-- sudo docker build -t samba-custom . && sudo docker run -it --name samba-server -v ~/github/samba:/etc/samba -p 139:139 -p 445:445 samba-custom bash
+- sudo docker build -t samba-custom . && sudo docker run -it --name samba-server -v ~/chemin/votre/clone:/etc/samba -p 139:139 -p 445:445 samba-custom bash
 - Et lire samba-installation.txt
 - Bonne chance
 # Lancement vsftpd
