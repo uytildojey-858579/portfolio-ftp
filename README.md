@@ -163,8 +163,127 @@ Ouvre dans le navigateur :
 3. Installe .crt, .key et ca_root.crt sur Apache
 4. Importer ca_root.crt sur les clients
 5. Profite du HTTPS !
+---
+
+
+### ** DNS **
+Bien sûr ! Voici les grandes étapes pour installer et configurer un serveur DNS BIND sur une nouvelle machine afin qu’il serve de DNS pour ton site :
 
 ---
 
+## 1. Installer BIND
+
+Sur une machine Linux (Debian/Ubuntu) :
+```bash
+sudo apt update
+sudo apt install bind9 bind9utils bind9-doc
+```
+
+---
+
+## 2. Configurer les fichiers BIND
+
+### a. Fichier de configuration principal
+
+- Le fichier principal de BIND est généralement `/etc/bind/named.conf` (Debian/Ubuntu) ou `/etc/named.conf` (CentOS).
+- Ce fichier inclut les zones à servir.
+
+### b. Définir la zone pour ton site
+
+Ajoute dans le fichier de configuration :
+
+```conf
+zone "ton-domaine.com" {
+    type master;
+    file "/etc/bind/db.ton-domaine.com";
+};
+```
+Remplace `ton-domaine.com` par ton vrai nom de domaine.
+
+---
+
+## 3. Créer le fichier de zone
+
+Crée le fichier `/etc/bind/db.ton-domaine.com` :
+
+```bash
+sudo cp /etc/bind/db.local /etc/bind/db.ton-domaine.com
+sudo nano /etc/bind/db.ton-domaine.com
+```
+
+Exemple de contenu de base :
+
+```
+$TTL    86400
+@       IN      SOA     ns1.ton-domaine.com. admin.ton-domaine.com. (
+                              2         ; Serial
+                         604800         ; Refresh
+                          86400         ; Retry
+                        2419200         ; Expire
+                         86400 )        ; Negative Cache TTL
+
+; Name servers
+        IN      NS      ns1.ton-domaine.com.
+
+; A records
+@       IN      A       IP_DE_TA_MACHINE_WEB
+ns1     IN      A       IP_DE_TA_MACHINE_DNS
+
+; CNAME, MX, etc. à ajouter au besoin
+```
+
+Remplace les IPs et noms par les tiens.
+
+---
+
+## 4. Configurer les accès réseau
+
+- Ouvre le port 53 en TCP et UDP sur le pare-feu.
+- Exemple (ufw sur Ubuntu) :
+```bash
+sudo ufw allow 53
+```
+
+---
+
+## 5. Tester la configuration
+
+Vérifie la syntaxe :
+```bash
+sudo named-checkconf
+sudo named-checkzone ton-domaine.com /etc/bind/db.ton-domaine.com
+```
+
+Redémarre BIND :
+```bash
+sudo systemctl restart bind9
+```
+
+---
+
+## 6. Tester le serveur DNS
+
+Depuis une autre machine :
+```bash
+dig @IP_DE_TA_MACHINE_DNS ton-domaine.com
+```
+
+---
+
+## 7. Mettre à jour les enregistrements du domaine
+
+Chez ton registrar (où tu as acheté ton domaine), mets à jour les serveurs DNS (nameservers) pour pointer vers l’IP de ta machine BIND.
+
+---
+
+### Résumé
+
+1. Installe BIND sur la nouvelle machine.
+2. Crée et configure la zone DNS pour ton domaine.
+3. Ouvre le port 53 sur le pare-feu.
+4. Redémarre BIND et teste ta config.
+5. Mets à jour ton registrar pour utiliser ton nouveau DNS.
+
+Si tu veux un exemple de fichier précis ou si tu as une distribution différente, précise-la !
 Si tu veux un script qui automatise tout ou un exemple de Dockerfile/compose, demande-moi !
 
