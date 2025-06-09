@@ -167,122 +167,133 @@ Ouvre dans le navigateur :
 
 
 ### ** DNS **
-Bien sûr ! Voici les grandes étapes pour installer et configurer un serveur DNS BIND sur une nouvelle machine afin qu’il serve de DNS pour ton site :
+
+Bien sûr ! Voici les grandes étapes pour installer et configurer ton projet avec Bind (DNS), Nginx (reverse proxy) et tes services (WordPress, Dashy, Gitea).  
+**Je vais t’indiquer les commandes principales à chaque étape, sur Debian/Ubuntu (adapte si tu es sur une autre distribution).**
 
 ---
 
-## 1. Installer BIND
+## 1. Installer Bind (serveur DNS) sur 192.168.30.10
 
-Sur une machine Linux (Debian/Ubuntu) :
 ```bash
 sudo apt update
 sudo apt install bind9 bind9utils bind9-doc
 ```
 
----
+**Configurer la zone :**
+- Édite `/etc/bind/named.conf.local` et ajoute :
 
-## 2. Configurer les fichiers BIND
-
-### a. Fichier de configuration principal
-
-- Le fichier principal de BIND est généralement `/etc/bind/named.conf` (Debian/Ubuntu) ou `/etc/named.conf` (CentOS).
-- Ce fichier inclut les zones à servir.
-
-### b. Définir la zone pour ton site
-
-Ajoute dans le fichier de configuration :
-
-```conf
-zone "ton-domaine.com" {
+```bash
+zone "auth.local" {
     type master;
-    file "/etc/bind/db.ton-domaine.com";
+    file "/etc/bind/zones/db.auth.local";
 };
 ```
-Remplace `ton-domaine.com` par ton vrai nom de domaine.
 
----
+- Crée le dossier si besoin :  
+  `sudo mkdir -p /etc/bind/zones`
+- Crée le fichier `/etc/bind/zones/db.auth.local` :
 
-## 3. Créer le fichier de zone
-
-Crée le fichier `/etc/bind/db.ton-domaine.com` :
-
-```bash
-sudo cp /etc/bind/db.local /etc/bind/db.ton-domaine.com
-sudo nano /etc/bind/db.ton-domaine.com
+```dns
+$TTL 604800
+@   IN  SOA ns.auth.local. admin.auth.local. (
+        2       ; Serial
+        604800  ; Refresh
+        86400   ; Retry
+        2419200 ; Expire
+        604800) ; Negative Cache TTL
+;
+@       IN  NS      ns.auth.local.
+ns      IN  A       192.168.30.10
+wordpress   IN  A   192.168.30.100
+gitea       IN  A   192.168.30.100
+dashy       IN  A   192.168.30.100
 ```
 
-Exemple de contenu de base :
+- Redémarre Bind :
 
-```
-$TTL    86400
-@       IN      SOA     ns1.ton-domaine.com. admin.ton-domaine.com. (
-                              2         ; Serial
-                         604800         ; Refresh
-                          86400         ; Retry
-                        2419200         ; Expire
-                         86400 )        ; Negative Cache TTL
-
-; Name servers
-        IN      NS      ns1.ton-domaine.com.
-
-; A records
-@       IN      A       IP_DE_TA_MACHINE_WEB
-ns1     IN      A       IP_DE_TA_MACHINE_DNS
-
-; CNAME, MX, etc. à ajouter au besoin
-```
-
-Remplace les IPs et noms par les tiens.
-
----
-
-## 4. Configurer les accès réseau
-
-- Ouvre le port 53 en TCP et UDP sur le pare-feu.
-- Exemple (ufw sur Ubuntu) :
-```bash
-sudo ufw allow 53
-```
-
----
-
-## 5. Tester la configuration
-
-Vérifie la syntaxe :
-```bash
-sudo named-checkconf
-sudo named-checkzone ton-domaine.com /etc/bind/db.ton-domaine.com
-```
-
-Redémarre BIND :
 ```bash
 sudo systemctl restart bind9
 ```
 
+- **Pense à configurer tes clients pour utiliser 192.168.30.10 comme DNS !**
+
 ---
 
-## 6. Tester le serveur DNS
+## 2. Installer Nginx (reverse proxy) sur 192.168.30.100
 
-Depuis une autre machine :
 ```bash
-dig @IP_DE_TA_MACHINE_DNS ton-domaine.com
+sudo apt update
+sudo apt install nginx
+```
+
+**Exemple de config `/etc/nginx/sites-available/proxy` :**
+
+```nginx
+server {
+    listen 80;
+    server_name wordpress.auth.local;
+
+    location / {
+        proxy_pass http://192.168.30.20:80;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+server {
+    listen 80;
+    server_name gitea.auth.local;
+
+    location / {
+        proxy_pass http://192.168.30.90:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+server {
+    listen 80;
+    server_name dashy.auth.local;
+
+    location / {
+        proxy_pass http://192.168.30.90:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+**Active la config et redémarre Nginx :**
+
+```bash
+sudo ln -s /etc/nginx/sites-available/proxy /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
 ```
 
 ---
 
-## 7. Mettre à jour les enregistrements du domaine
+## 3. Installer les services (WordPress, Dashy, Gitea)
 
-Chez ton registrar (où tu as acheté ton domaine), mets à jour les serveurs DNS (nameservers) pour pointer vers l’IP de ta machine BIND.
+- **WordPress** (sur 192.168.30.20) :  
+  Utilise `docker`, `docker-compose` ou installation classique LAMP selon ton choix.
+- **Dashy** (sur 192.168.30.90:8080) :  
+  [https://dashy.to/docs/](https://dashy.to/docs/)
+- **Gitea** (sur 192.168.30.90:3000) :  
+  [https://docs.gitea.com/installation](https://docs.gitea.com/installation)
+
+(Tu peux me préciser si tu veux les étapes pour installer l’un de ces services !)
 
 ---
 
-### Résumé
+## 4. Tester
 
-1. Installe BIND sur la nouvelle machine.
-2. Crée et configure la zone DNS pour ton domaine.
-3. Ouvre le port 53 sur le pare-feu.
-4. Redémarre BIND et teste ta config.
-5. Mets à jour ton registrar pour utiliser ton nouveau DNS.
+- Sur un client, mets 192.168.30.10 comme DNS.
+- Ping `wordpress.auth.local`, il doit répondre 192.168.30.100.
+- Ouvre `http://wordpress.auth.local` dans un navigateur, ça doit t'afficher ton site WordPress (ou l'accueil du service, selon ce qui tourne).
+
+---
+
+Dis-moi sur quelle(s) partie(s) tu veux plus de détails ou si tu veux un script pour automatiser !
 
 Si tu veux un exemple de fichier précis ou si tu as une distribution différente, précise-la !
 Si tu veux un script qui automatise tout ou un exemple de Dockerfile/compose, demande-moi !
