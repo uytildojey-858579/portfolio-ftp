@@ -1,0 +1,15 @@
+// /etc/bind/zones/db.auth.local
+$TTL    604800
+@       IN      SOA     ns.auth.local. admin.auth.local. (
+                              2         ; Serial
+                         604800         ; Refresh
+                          86400         ; Retry
+                        2419200         ; Expire
+                         604800 )       ; Negative Cache TTL
+;
+@               IN      NS      ns.auth.local.
+ns              IN      A       192.168.30.10
+
+wordpress       IN      A       192.168.30.100
+dashy           IN      A       192.168.30.100
+gitea           IN      A       192.168.30.100
