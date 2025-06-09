@@ -1,0 +1,5 @@
+// /etc/bind/named.conf.local
+zone "auth.local" {
+    type master;
+    file "/etc/bind/zones/db.auth.local";
+};
