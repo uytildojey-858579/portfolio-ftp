@@ -298,3 +298,158 @@ Dis-moi sur quelle(s) partie(s) tu veux plus de détails ou si tu veux un script
 Si tu veux un exemple de fichier précis ou si tu as une distribution différente, précise-la !
 Si tu veux un script qui automatise tout ou un exemple de Dockerfile/compose, demande-moi !
 
+
+
+## Securiser avec 443, pas testé :
+Très bonne remarque !  
+Voici un guide ultra précis, étape par étape, avec **emplacement des fichiers**, **commandes** et **sur quelle machine** il faut agir, pour sécuriser Nginx sur ton reverse proxy avec ta PKI “maison”.
+
+## Résumé du flux
+
+- **PKI (ex: 192.168.30.50 ou autre)** : Ne sert qu’à signer les CSR et stocker la clé de CA.
+- **Reverse Proxy (Nginx, 192.168.30.100)** : Doit générer sa clé privée, son CSR, recevoir le .crt signé, et être configuré en HTTPS.
+- **Clients** : Importent le certificat racine (ca_root.crt).
+
+---
+
+## 1. Sur la machine PKI (ex: 192.168.30.50)
+
+### (Si non fait) Générer la CA
+
+```bash
+mkdir -p ~/pki/ca
+cd ~/pki/ca
+openssl genrsa -aes256 -out ca.key 4096
+openssl req -x509 -new -nodes -key ca.key -sha256 -days 3650 -out ca_root.crt -subj "/C=FR/ST=France/O=MonOrg/CN=MonCA"
+```
+
+- **Fichiers importants** :
+  - `~/pki/ca/ca.key` (clé privée CA, NE JAMAIS SORTIR de cette machine)
+  - `~/pki/ca/ca_root.crt` (certificat racine, à distribuer partout où il faut faire confiance à la CA)
+
+---
+
+## 2. Sur le reverse proxy (Nginx, 192.168.30.100)
+
+### Générer la clé privée et le CSR avec plusieurs SAN
+
+**Fichier de configuration OpenSSL (ex: `/etc/nginx/ssl/openssl-san.cnf`) :**
+
+```ini name=/etc/nginx/ssl/openssl-san.cnf
+[req]
+default_bits = 2048
+prompt = no
+default_md = sha256
+distinguished_name = dn
+req_extensions = req_ext
+
+[dn]
+C = FR
+ST = France
+L = Paris
+O = MonOrg
+CN = wordpress.auth.local
+
+[req_ext]
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = wordpress.auth.local
+DNS.2 = gitea.auth.local
+DNS.3 = dashy.auth.local
+```
+
+**Commandes pour générer la clé et le CSR :**
+```bash
+sudo mkdir -p /etc/nginx/ssl
+cd /etc/nginx/ssl
+
+sudo openssl genrsa -out nginx.key 2048
+sudo openssl req -new -key nginx.key -out nginx.csr -config openssl-san.cnf
+```
+
+- **À transférer sur la PKI** : `/etc/nginx/ssl/nginx.csr`
+- **À garder** : `/etc/nginx/ssl/nginx.key` (ne sort PAS de cette machine)
+
+---
+
+## 3. Sur la PKI (machine CA, ex 192.168.30.50)
+
+**Signer le CSR du reverse proxy**
+
+```bash
+cd ~/pki/ca
+openssl x509 -req -in /chemin/vers/nginx.csr -CA ca_root.crt -CAkey ca.key -CAcreateserial -out nginx.crt -days 825 -sha256 -extfile /chemin/vers/openssl-san.cnf -extensions req_ext
+```
+
+- `/chemin/vers/nginx.csr` : récupéré depuis le reverse proxy
+- `/chemin/vers/openssl-san.cnf` : tu peux copier le même fichier que sur le reverse proxy
+
+**Produit** : `nginx.crt` à renvoyer sur le reverse proxy.
+
+---
+
+## 4. Sur le reverse proxy (Nginx, 192.168.30.100)
+
+**Copie les fichiers :**
+- `/etc/nginx/ssl/nginx.crt` : certificat signé reçu de la PKI
+- `/etc/nginx/ssl/ca_root.crt` : certificat racine reçu de la PKI (pour la chaîne complète)
+
+**Exemple de config Nginx pour HTTPS**
+
+```nginx name=/etc/nginx/sites-available/proxy
+server {
+    listen 443 ssl;
+    server_name wordpress.auth.local gitea.auth.local dashy.auth.local;
+
+    ssl_certificate /etc/nginx/ssl/nginx.crt;
+    ssl_certificate_key /etc/nginx/ssl/nginx.key;
+    ssl_trusted_certificate /etc/nginx/ssl/ca_root.crt;
+
+    # ... vos blocs location proxy_pass ici ...
+}
+```
+
+**Active la config et recharge Nginx**
+
+```bash
+sudo ln -sf /etc/nginx/sites-available/proxy /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+---
+
+## 5. Sur chaque client (Windows, Linux, etc.)
+
+**Importer** le certificat racine `ca_root.crt` pour éviter l’avertissement de navigateur.
+
+- Sous Linux : 
+  - `sudo cp ca_root.crt /usr/local/share/ca-certificates/monca.crt`
+  - `sudo update-ca-certificates`
+- Sous Windows : 
+  - Double-clique → Installer en tant qu’Autorité de certification racine de confiance
+
+---
+
+## Résumé du “balade” de fichiers
+
+- **La clé privée de la CA** : NE SORT JAMAIS de la PKI.
+- **Le CSR** : généré sur le reverse proxy, envoyé à la PKI pour signature.
+- **Le certificat signé** : renvoyé de la PKI vers le reverse proxy.
+- **Le certificat racine** : copié sur chaque client et serveur web.
+- **La clé privée du reverse proxy** : NE SORT JAMAIS du reverse proxy.
+
+---
+
+### Tu ne fais donc “balader” que :
+- Le CSR (du reverse proxy → PKI)
+- Le certificat signé (PKI → reverse proxy)
+- Le ca_root.crt (PKI → reverse proxy + clients)
+
+**Aucune clé privée ne doit jamais sortir de la machine qui l’a générée !**
+
+---
+
+Si tu veux un script pour automatiser tout ça ou un schéma, demande-moi !
+
