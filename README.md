@@ -255,6 +255,14 @@ openssl x509 -req -in /chemin/vers/nginx.csr -CA ca_root.crt -CAkey ca.key -CAcr
 **Exemple de config Nginx pour HTTPS**
 
 ```nginx name=/etc/nginx/sites-available/proxy
+# Redirige tout le HTTP vers HTTPS
+server {
+    listen 80;
+    server_name wordpress.auth.local gitea.auth.local dashy.auth.local;
+    return 301 https://$host$request_uri;
+}
+
+# Reverse proxy HTTPS pour tous les services
 server {
     listen 443 ssl;
     server_name wordpress.auth.local gitea.auth.local dashy.auth.local;
@@ -263,7 +271,29 @@ server {
     ssl_certificate_key /etc/nginx/ssl/nginx.key;
     ssl_trusted_certificate /etc/nginx/ssl/ca_root.crt;
 
-    # ... vos blocs location proxy_pass ici ...
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    # Accès à WordPress
+    location / {
+        if ($host = "wordpress.auth.local") {
+            proxy_pass http://192.168.30.20:80;
+        }
+        if ($host = "gitea.auth.local") {
+            proxy_pass http://192.168.30.90:3000;
+        }
+        if ($host = "dashy.auth.local") {
+            proxy_pass http://192.168.30.90:8080;
+        }
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+    }
+}
 }
 ```
 
